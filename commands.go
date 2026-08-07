@@ -63,6 +63,38 @@ func handlerRegister(s *state, cmd command) error {
 	return nil
 }
 
+func handlerReset(s *state, cmd command) error {
+	if len(cmd.args) != 0 {
+		return fmt.Errorf("reset expects no arguments")
+	}
+
+	err := s.db.ResetUsers(context.Background())
+	if err != nil {
+		return err
+	}
+	fmt.Println("Users have been reset.")
+	return nil
+}
+
+func handlerUsers(s *state, cmd command) error {
+	if len(cmd.args) != 0 {
+		return fmt.Errorf("users expects no arguments")
+	}
+
+	users, err := s.db.GetUsers(context.Background())
+	if err != nil {
+		return err
+	}
+	for _, user := range users {
+		fmt.Printf("* %s", user.Name)
+		if user.Name == s.cfg.CurrentUserName {
+			fmt.Printf(" (current)")
+		}
+		fmt.Printf("\n")
+	}
+	return nil
+}
+
 type commands struct {
 	handlers map[string]func(*state, command) error
 }
@@ -85,5 +117,7 @@ func getCommands() commands {
 	commands := commands{handlers: make(map[string]func(*state, command) error)}
 	commands.register("login", handlerLogin)
 	commands.register("register", handlerRegister)
+	commands.register("reset", handlerReset)
+	commands.register("users", handlerUsers)
 	return commands
 }
