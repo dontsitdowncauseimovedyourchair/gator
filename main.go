@@ -1,26 +1,40 @@
 package main
 
 import (
-	"fmt"
 	"log"
+	"os"
 
 	"github.com/dontsitdowncauseimovedyourchair/gator/internal/config"
 )
 
 func main() {
+
+	if len(os.Args) < 2 {
+		log.Fatalf("Not enough arguments provided")
+	}
+
 	cfg, err := config.Read()
 	if err != nil {
 		log.Fatalf("couldn't read config: %v", err)
 	}
 
-	err = cfg.SetUser("Alex")
-	if err != nil {
-		log.Fatalf("flopped reading config: %v", err)
+	globalState := state{
+		cfg: &cfg,
 	}
 
-	cfg, err = config.Read()
-	if err != nil {
-		log.Fatalf("couldn't read config: %v", err)
+	commands := commands{handlers: make(map[string]func(*state, command) error)}
+	commands.register("login", handlerLogin)
+
+	userCommand := os.Args[1]
+	userArgs := os.Args[2:]
+
+	cmd := command{
+		name: userCommand,
+		args: userArgs,
 	}
-	fmt.Println(cfg)
+
+	if err := commands.run(&globalState, cmd); err != nil {
+		log.Fatalf("%s flop: %v", cmd.name, err)
+	}
+
 }
