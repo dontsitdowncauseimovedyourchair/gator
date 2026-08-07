@@ -1,10 +1,13 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"os"
 
 	"github.com/dontsitdowncauseimovedyourchair/gator/internal/config"
+	"github.com/dontsitdowncauseimovedyourchair/gator/internal/database"
+	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -18,12 +21,17 @@ func main() {
 		log.Fatalf("couldn't read config: %v", err)
 	}
 
+	dbURL := "postgres://yucateco:@localhost:5432/gator"
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatalf("unable to open database at %s: %v", dbURL, err)
+	}
+	dbQueries := database.New(db)
+
 	globalState := state{
+		db:  dbQueries,
 		cfg: &cfg,
 	}
-
-	commands := commands{handlers: make(map[string]func(*state, command) error)}
-	commands.register("login", handlerLogin)
 
 	userCommand := os.Args[1]
 	userArgs := os.Args[2:]
@@ -34,7 +42,7 @@ func main() {
 	}
 
 	if err := commands.run(&globalState, cmd); err != nil {
-		log.Fatalf("%s flop: %v", cmd.name, err)
+		log.Fatalf("%v", err)
 	}
 
 }
