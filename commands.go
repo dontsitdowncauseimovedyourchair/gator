@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -19,7 +21,16 @@ func handlerLogin(s *state, cmd command) error {
 		return fmt.Errorf("usage: login <username>")
 	}
 	username := cmd.args[0]
-	err := s.cfg.SetUser(username)
+
+	user, err := s.db.GetUser(context.Background(), username)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("user %s does not exist", username)
+		}
+		return fmt.Errorf("%w", err)
+	}
+
+	err = s.cfg.SetUser(user.Name)
 	if err != nil {
 		return err
 	}
