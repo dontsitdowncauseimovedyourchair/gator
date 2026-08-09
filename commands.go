@@ -141,6 +141,26 @@ func handlerAddFeed(s *state, cmd command) error {
 	fmt.Println(feed)
 	return nil
 }
+func handlerFeeds(s *state, cmd command) error {
+	if len(cmd.args) != 0 {
+		return fmt.Errorf("feeds expects no arguments")
+	}
+
+	feeds, err := s.db.GetFeeds(context.Background())
+	if err != nil {
+		return fmt.Errorf("flop fetching feeds: %w", err)
+	}
+
+	fmt.Println("Feeds:")
+	for _, feed := range feeds {
+		creator, err := s.db.GetFeedCreatorName(context.Background(), feed.UserID)
+		if err != nil {
+			return fmt.Errorf("flop fetching feed creator name: %w", err)
+		}
+		fmt.Printf(" - \"%s\" created by %s from %s\n", feed.Name, creator, feed.Url)
+	}
+	return nil
+}
 
 type commands struct {
 	handlers map[string]func(*state, command) error
@@ -168,5 +188,6 @@ func getCommands() commands {
 	commands.register("users", handlerUsers)
 	commands.register("agg", handlerAgg)
 	commands.register("addfeed", handlerAddFeed)
+	commands.register("feeds", handlerFeeds)
 	return commands
 }
