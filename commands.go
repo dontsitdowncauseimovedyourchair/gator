@@ -96,11 +96,49 @@ func handlerUsers(s *state, cmd command) error {
 }
 
 func handlerAgg(s *state, cmd command) error {
+	if len(cmd.args) != 0 {
+		return fmt.Errorf("agg expects no arguments")
+	}
+
 	feed, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
 	if err != nil {
 		return err
 	}
 	fmt.Println(*feed)
+	return nil
+}
+
+func handlerAddFeed(s *state, cmd command) error {
+	if len(cmd.args) != 2 {
+		return fmt.Errorf("usage: addfeed <name> <url>")
+	}
+
+	feedName := cmd.args[0]
+	url := cmd.args[1]
+
+	username := s.cfg.CurrentUserName
+
+	user, err := s.db.GetUser(context.Background(), username)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("user %s does not exist", username)
+		}
+		return fmt.Errorf("%w", err)
+	}
+
+	feed, err := s.db.CreateFeed(context.Background(), database.CreateFeedParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Name:      feedName,
+		Url:       url,
+		UserID:    user.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("flop creating feed: %w", err)
+	}
+	fmt.Printf("Created feed %s at %s for user %s\n", feed.Name, feed.Url, username)
+	fmt.Println(feed)
 	return nil
 }
 
@@ -129,5 +167,6 @@ func getCommands() commands {
 	commands.register("reset", handlerReset)
 	commands.register("users", handlerUsers)
 	commands.register("agg", handlerAgg)
+	commands.register("addfeed", handlerAddFeed)
 	return commands
 }
