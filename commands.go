@@ -137,10 +137,23 @@ func handlerAddFeed(s *state, cmd command) error {
 	if err != nil {
 		return fmt.Errorf("flop creating feed: %w", err)
 	}
+
+	_, err = s.db.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    user.ID,
+		FeedID:    feed.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create feed follow: %w", err)
+	}
+
 	fmt.Printf("Created feed %s at %s for user %s\n", feed.Name, feed.Url, username)
 	fmt.Println(feed)
 	return nil
 }
+
 func handlerFeeds(s *state, cmd command) error {
 	if len(cmd.args) != 0 {
 		return fmt.Errorf("feeds expects no arguments")
@@ -158,6 +171,63 @@ func handlerFeeds(s *state, cmd command) error {
 			return fmt.Errorf("flop fetching feed creator name: %w", err)
 		}
 		fmt.Printf(" - \"%s\" created by %s from %s\n", feed.Name, creator, feed.Url)
+	}
+	return nil
+}
+
+func handlerFollow(s *state, cmd command) error {
+	if len(cmd.args) != 1 {
+		return fmt.Errorf("usage: follow <url>")
+	}
+	username := s.cfg.CurrentUserName
+	user, err := s.db.GetUser(context.Background(), username)
+	if err != nil {
+		return fmt.Errorf("failed to fetch user: %w", err)
+	}
+	url := cmd.args[0]
+	feed, err := s.db.GetFeedByURL(context.Background(), url)
+	if err != nil {
+		return fmt.Errorf("failed to fetch feed: %w", err)
+	}
+
+	_, err = s.db.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    user.ID,
+		FeedID:    feed.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create feed follow: %w", err)
+	}
+
+	fmt.Printf("Subscribed to feed \"%s\" as user %s\n", feed.Name, user.Name)
+	return nil
+}
+
+func handlerFollowing(s *state, cmd command) error {
+	if len(cmd.args) != 0 {
+		return fmt.Errorf("following expects no arguments")
+	}
+
+	username := s.cfg.CurrentUserName
+	user, err := s.db.GetUser(context.Background(), username)
+	if err != nil {
+		return fmt.Errorf("failed to fetch user: %w", err)
+	}
+
+	feeds, err := s.db.GetFeedFollowsForUser(context.Background(), user.ID)
+	if err != nil {
+		return fmt.Errorf("flop fetching feeds followed: %w", err)
+	}
+
+	if len(feeds) > 0 {
+		fmt.Printf("Feeds %s is following:\n", user.Name)
+		for i := range feeds {
+			fmt.Printf(" - %s\n", feeds[i].FeedName)
+		}
+	} else {
+		fmt.Printf("User %s is currently following no feeds.\n", user.Name)
 	}
 	return nil
 }
@@ -189,5 +259,7 @@ func getCommands() commands {
 	commands.register("agg", handlerAgg)
 	commands.register("addfeed", handlerAddFeed)
 	commands.register("feeds", handlerFeeds)
+	commands.register("follow", handlerFollow)
+	commands.register("following", handlerFollowing)
 	return commands
 }
