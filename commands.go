@@ -59,7 +59,6 @@ func handlerRegister(s *state, cmd command) error {
 		return err
 	}
 	fmt.Printf("user with name %s was successfully created and logged in!\n", user.Name)
-	fmt.Printf("user struct: %v\n", user)
 	return nil
 }
 
@@ -108,23 +107,13 @@ func handlerAgg(s *state, cmd command) error {
 	return nil
 }
 
-func handlerAddFeed(s *state, cmd command) error {
+func handlerAddFeed(s *state, cmd command, user database.User) error {
 	if len(cmd.args) != 2 {
 		return fmt.Errorf("usage: addfeed <name> <url>")
 	}
 
 	feedName := cmd.args[0]
 	url := cmd.args[1]
-
-	username := s.cfg.CurrentUserName
-
-	user, err := s.db.GetUser(context.Background(), username)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("user %s does not exist", username)
-		}
-		return fmt.Errorf("%w", err)
-	}
 
 	feed, err := s.db.CreateFeed(context.Background(), database.CreateFeedParams{
 		ID:        uuid.New(),
@@ -149,8 +138,7 @@ func handlerAddFeed(s *state, cmd command) error {
 		return fmt.Errorf("failed to create feed follow: %w", err)
 	}
 
-	fmt.Printf("Created feed %s at %s for user %s\n", feed.Name, feed.Url, username)
-	fmt.Println(feed)
+	fmt.Printf("Created feed %s at %s for user %s\n", feed.Name, feed.Url, user.Name)
 	return nil
 }
 
@@ -175,15 +163,11 @@ func handlerFeeds(s *state, cmd command) error {
 	return nil
 }
 
-func handlerFollow(s *state, cmd command) error {
+func handlerFollow(s *state, cmd command, user database.User) error {
 	if len(cmd.args) != 1 {
 		return fmt.Errorf("usage: follow <url>")
 	}
-	username := s.cfg.CurrentUserName
-	user, err := s.db.GetUser(context.Background(), username)
-	if err != nil {
-		return fmt.Errorf("failed to fetch user: %w", err)
-	}
+
 	url := cmd.args[0]
 	feed, err := s.db.GetFeedByURL(context.Background(), url)
 	if err != nil {
@@ -205,15 +189,9 @@ func handlerFollow(s *state, cmd command) error {
 	return nil
 }
 
-func handlerFollowing(s *state, cmd command) error {
+func handlerFollowing(s *state, cmd command, user database.User) error {
 	if len(cmd.args) != 0 {
 		return fmt.Errorf("following expects no arguments")
-	}
-
-	username := s.cfg.CurrentUserName
-	user, err := s.db.GetUser(context.Background(), username)
-	if err != nil {
-		return fmt.Errorf("failed to fetch user: %w", err)
 	}
 
 	feeds, err := s.db.GetFeedFollowsForUser(context.Background(), user.ID)
@@ -250,6 +228,26 @@ func (c *commands) register(name string, f func(*state, command) error) {
 	c.handlers[name] = f
 }
 
+// handle commands that require me to log in better-ly
+func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command) error {
+	return func(s *state, cmd command) error {
+		username := s.cfg.CurrentUserName
+		user, err := s.db.GetUser(context.Background(), username)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("user %s does not exist", username)
+			}
+			return fmt.Errorf("flop fetching user: %w", err)
+		}
+		err = handler(s, cmd, user)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+}
+
 func getCommands() commands {
 	commands := commands{handlers: make(map[string]func(*state, command) error)}
 	commands.register("login", handlerLogin)
@@ -257,9 +255,9 @@ func getCommands() commands {
 	commands.register("reset", handlerReset)
 	commands.register("users", handlerUsers)
 	commands.register("agg", handlerAgg)
-	commands.register("addfeed", handlerAddFeed)
+	commands.register("addfeed", middlewareLoggedIn(handlerAddFeed))
 	commands.register("feeds", handlerFeeds)
-	commands.register("follow", handlerFollow)
-	commands.register("following", handlerFollowing)
+	commands.register("follow", middlewareLoggedIn(handlerFollow))
+	commands.register("following", middlewareLoggedIn(handlerFollowing))
 	return commands
 }
