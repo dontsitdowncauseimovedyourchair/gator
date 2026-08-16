@@ -210,6 +210,29 @@ func handlerFollowing(s *state, cmd command, user database.User) error {
 	return nil
 }
 
+func handlerUnfollow(s *state, cmd command, user database.User) error {
+	if len(cmd.args) != 1 {
+		return fmt.Errorf("usage: unfollow <url>")
+	}
+
+	url := cmd.args[0]
+
+	feed, err := s.db.GetFeedByURL(context.Background(), url)
+	if err != nil {
+		return fmt.Errorf("failed to fetch feed: %w", err)
+	}
+
+	err = s.db.DeleteFeedFollowRow(context.Background(), database.DeleteFeedFollowRowParams{
+		UserID: user.ID,
+		FeedID: feed.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("flopped unfollowing: %w", err)
+	}
+
+	return nil
+}
+
 type commands struct {
 	handlers map[string]func(*state, command) error
 }
@@ -259,5 +282,6 @@ func getCommands() commands {
 	commands.register("feeds", handlerFeeds)
 	commands.register("follow", middlewareLoggedIn(handlerFollow))
 	commands.register("following", middlewareLoggedIn(handlerFollowing))
+	commands.register("unfollow", middlewareLoggedIn(handlerUnfollow))
 	return commands
 }
