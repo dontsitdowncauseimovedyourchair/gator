@@ -95,15 +95,31 @@ func handlerUsers(s *state, cmd command) error {
 }
 
 func handlerAgg(s *state, cmd command) error {
-	if len(cmd.args) != 0 {
-		return fmt.Errorf("agg expects no arguments")
+	if len(cmd.args) != 1 {
+		return fmt.Errorf("usage agg <interval>, interval examples: 1h | 5m | 10s | 500ms | 1h10m5s")
 	}
 
-	feed, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	duration := cmd.args[0]
+	interval, err := time.ParseDuration(duration)
 	if err != nil {
-		return err
+		return fmt.Errorf("interval flop: %w", err)
 	}
-	fmt.Println(*feed)
+	if interval < time.Duration(time.Millisecond*100) {
+		return fmt.Errorf("minimum aggregation interval is 100ms, avoid DDOS-ing pls\n")
+	}
+
+	fmt.Printf("Collecting feeds every %s\n", interval.String())
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for ; ; <-ticker.C {
+		err = scrapeFeeds(context.Background(), s)
+		if err != nil {
+			fmt.Printf("feed flop: %s\n", err.Error())
+		}
+	}
+
 	return nil
 }
 
@@ -241,7 +257,11 @@ func (c *commands) run(s *state, cmd command) error {
 	if s == nil {
 		return fmt.Errorf("%s flop: no state provided", cmd.name)
 	}
-	if err := c.handlers[cmd.name](s, cmd); err != nil {
+	commandable, ok := c.handlers[cmd.name]
+	if !ok {
+		return fmt.Errorf("unknown command %s", cmd.name)
+	}
+	if err := commandable(s, cmd); err != nil {
 		return fmt.Errorf("%s flop: %w", cmd.name, err)
 	}
 	return nil
