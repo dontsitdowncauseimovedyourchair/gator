@@ -21,10 +21,9 @@ func main() {
 		log.Fatalf("couldn't read config: %v", err)
 	}
 
-	dbURL := "postgres://yucateco:@localhost:5432/gator?sslmode=disable"
-	db, err := sql.Open("postgres", dbURL)
+	db, err := sql.Open("postgres", cfg.DbURL)
 	if err != nil {
-		log.Fatalf("unable to open database at %s: %v", dbURL, err)
+		log.Fatalf("unable to open database at %s: %v", cfg.DbURL, err)
 	}
 	dbQueries := database.New(db)
 
