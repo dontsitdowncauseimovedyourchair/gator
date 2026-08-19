@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/dontsitdowncauseimovedyourchair/gator/internal/database"
@@ -249,6 +250,34 @@ func handlerUnfollow(s *state, cmd command, user database.User) error {
 	return nil
 }
 
+func handlerBrowse(s *state, cmd command, user database.User) error {
+	limit := 2 //Default
+	var err error
+
+	if len(cmd.args) > 1 {
+		return fmt.Errorf("usage: browse [limit]")
+	} else if len(cmd.args) == 1 {
+		limit, err = strconv.Atoi(cmd.args[0])
+		if err != nil {
+			return fmt.Errorf("%s is not a number for posts limit", cmd.args[0])
+		}
+	}
+
+	posts, err := s.db.GetPostsForUser(context.Background(), database.GetPostsForUserParams{
+		UserID: user.ID,
+		Limit:  int32(limit),
+	})
+	if err != nil {
+		return fmt.Errorf("flop fetching posts: %w", err)
+	}
+
+	for i := range posts {
+		fmt.Printf(" - %s - %s\n\t%s\n\tLink: %s\n", posts[i].Title, posts[i].PublishedAt.Time, posts[i].Description.String, posts[i].Url)
+	}
+
+	return nil
+}
+
 type commands struct {
 	handlers map[string]func(*state, command) error
 }
@@ -303,5 +332,6 @@ func getCommands() commands {
 	commands.register("follow", middlewareLoggedIn(handlerFollow))
 	commands.register("following", middlewareLoggedIn(handlerFollowing))
 	commands.register("unfollow", middlewareLoggedIn(handlerUnfollow))
+	commands.register("browse", middlewareLoggedIn(handlerBrowse))
 	return commands
 }
